@@ -3,7 +3,7 @@
 echo '================================================================================'
 echo 'load pg_denormalized'
 echo '================================================================================'
-time python3 load_tweets_batch.py --db postgresql://postgres:pass@localhost:5581/postgres --inputs data/*
+time sh load_denormalized.sh data/*
 
 echo '================================================================================'
 echo 'load pg_normalized'
