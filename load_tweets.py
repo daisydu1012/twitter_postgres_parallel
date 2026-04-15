@@ -15,39 +15,42 @@ def remove_nulls(s):
 
 def insert_tweet(connection, tweet):
 
-    sql = sqlalchemy.sql.text('''
+    # skip if exists
+    sql = sqlalchemy.sql.text("""
     SELECT id_tweets FROM tweets WHERE id_tweets = :id
-    ''')
+    """)
     if connection.execute(sql, {'id': tweet['id']}).first():
         return
 
     with connection.begin():
 
-        ################################
+        # ------------------------
         # users
-        ################################
-        sql = sqlalchemy.sql.text('''
+        # ------------------------
+        sql = sqlalchemy.sql.text("""
         INSERT INTO users (id_users)
         VALUES (:id)
         ON CONFLICT DO NOTHING
-        ''')
+        """)
         connection.execute(sql, {'id': tweet['user']['id']})
 
-        ################################
-        # reply user
-        ################################
         if tweet.get('in_reply_to_user_id'):
             connection.execute(sql, {'id': tweet['in_reply_to_user_id']})
 
-        ################################
-        # tweet
-        ################################
+        # ------------------------
+        # tweet text
+        # ------------------------
         try:
             text = tweet['extended_tweet']['full_text']
         except:
-            text = tweet['text']
+            text = tweet.get('text')
 
-        sql = sqlalchemy.sql.text('''
+        text = remove_nulls(text)
+
+        # ------------------------
+        # insert tweet
+        # ------------------------
+        sql = sqlalchemy.sql.text("""
         INSERT INTO tweets (
             id_tweets, id_users, created_at,
             in_reply_to_status_id, in_reply_to_user_id, quoted_status_id,
@@ -57,88 +60,110 @@ def insert_tweet(connection, tweet):
         VALUES (
             :id, :user, :created,
             :reply_status, :reply_user, :quote,
-            :retweet, :fav, :quote_count,
+            :retweet, :favorite, :quote_count,
             :source, :text
         )
-        ON CONFLICT DO NOTHING
-        ''')
+        """)
 
         connection.execute(sql, {
             'id': tweet['id'],
             'user': tweet['user']['id'],
-            'created': tweet['created_at'],
+            'created': tweet.get('created_at'),
             'reply_status': tweet.get('in_reply_to_status_id'),
             'reply_user': tweet.get('in_reply_to_user_id'),
             'quote': tweet.get('quoted_status_id'),
-            'retweet': tweet.get('retweet_count'),
-            'fav': tweet.get('favorite_count'),
-            'quote_count': tweet.get('quote_count'),
+            'retweet': tweet.get('retweet_count', 0),
+            'favorite': tweet.get('favorite_count', 0),
+            'quote_count': tweet.get('quote_count', 0),
             'source': tweet.get('source'),
-            'text': remove_nulls(text)
+            'text': text
         })
 
-        ################################
+        # ------------------------
         # hashtags
-        ################################
-        try:
-            hashtags = tweet['extended_tweet']['entities']['hashtags']
-        except:
-            hashtags = tweet['entities']['hashtags']
-
-        for tag in hashtags:
-            connection.execute(sqlalchemy.sql.text('''
+        # ------------------------
+        for tag in tweet.get('entities', {}).get('hashtags', []):
+            connection.execute(sqlalchemy.sql.text("""
             INSERT INTO tweet_tags (id_tweets, tag)
             VALUES (:id, :tag)
             ON CONFLICT DO NOTHING
-            '''), {
+            """), {
                 'id': tweet['id'],
-                'tag': '#' + tag['text']
+                'tag': tag['text'].lower()
             })
 
-        ################################
+        # ------------------------
         # mentions
-        ################################
-        try:
-            mentions = tweet['extended_tweet']['entities']['user_mentions']
-        except:
-            mentions = tweet['entities']['user_mentions']
-
-        for m in mentions:
-            connection.execute(sqlalchemy.sql.text('''
-            INSERT INTO users (id_users)
-            VALUES (:id)
-            ON CONFLICT DO NOTHING
-            '''), {'id': m['id']})
-
-            connection.execute(sqlalchemy.sql.text('''
+        # ------------------------
+        for m in tweet.get('entities', {}).get('user_mentions', []):
+            connection.execute(sqlalchemy.sql.text("""
             INSERT INTO tweet_mentions (id_tweets, id_users)
-            VALUES (:tweet, :user)
+            VALUES (:id_tweets, :id_users)
             ON CONFLICT DO NOTHING
-            '''), {
-                'tweet': tweet['id'],
-                'user': m['id']
+            """), {
+                'id_tweets': tweet['id'],
+                'id_users': m['id']
+            })
+
+        # ------------------------
+        # urls
+        # ------------------------
+        for u in tweet.get('entities', {}).get('urls', []):
+            connection.execute(sqlalchemy.sql.text("""
+            INSERT INTO tweet_urls (id_tweets, url)
+            VALUES (:id, :url)
+            ON CONFLICT DO NOTHING
+            """), {
+                'id': tweet['id'],
+                'url': u.get('expanded_url')
+            })
+
+        # ------------------------
+        # media
+        # ------------------------
+        media = tweet.get('extended_entities', {}).get('media', [])
+        for m in media:
+            connection.execute(sqlalchemy.sql.text("""
+            INSERT INTO tweet_media (id_tweets, url, type)
+            VALUES (:id, :url, :type)
+            ON CONFLICT DO NOTHING
+            """), {
+                'id': tweet['id'],
+                'url': m.get('media_url'),
+                'type': m.get('type')
             })
 
 
 def main():
     import argparse
-
     parser = argparse.ArgumentParser()
     parser.add_argument('--db', required=True)
     parser.add_argument('--inputs', nargs='+', required=True)
+    parser.add_argument('--print_every', type=int, default=10000)
     args = parser.parse_args()
 
     engine = sqlalchemy.create_engine(args.db)
-    connection = engine.connect().execution_options(isolation_level="AUTOCOMMIT")
-    for filename in sorted(args.inputs):
-        print(datetime.datetime.now(), filename)
-        with zipfile.ZipFile(filename, 'r') as archive:
-            for subfile in archive.namelist():
-                with io.TextIOWrapper(archive.open(subfile)) as f:
+
+    connection = engine.connect().execution_options(
+        isolation_level="AUTOCOMMIT"
+    )
+
+    i = 0
+
+    for filename in args.inputs:
+        print(filename)
+
+        with zipfile.ZipFile(filename) as z:
+            for name in z.namelist():
+                with z.open(name) as f:
                     for line in f:
                         tweet = json.loads(line)
                         insert_tweet(connection, tweet)
 
+                        if i % args.print_every == 0:
+                            print(f"{filename} - i= {i} id= {tweet['id']}")
+                        i += 1
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
