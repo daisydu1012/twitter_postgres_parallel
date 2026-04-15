@@ -87,28 +87,5 @@ CREATE TABLE tweet_media (
 /*
  * Precomputes the total number of occurrences for each hashtag
  */
-CREATE MATERIALIZED VIEW tweet_tags_total AS (
-    SELECT 
-        row_number() over (order by count(*) desc) AS row,
-        tag, 
-        count(*) AS total
-    FROM tweet_tags
-    GROUP BY tag
-    ORDER BY total DESC
-);
-
-/*
- * Precomputes the number of hashtags that co-occur with each other
- */
-CREATE MATERIALIZED VIEW tweet_tags_cooccurrence AS (
-    SELECT 
-        t1.tag AS tag1,
-        t2.tag AS tag2,
-        count(*) AS total
-    FROM tweet_tags t1
-    INNER JOIN tweet_tags t2 ON t1.id_tweets = t2.id_tweets
-    GROUP BY t1.tag, t2.tag
-    ORDER BY total DESC
-);
 
 COMMIT;
