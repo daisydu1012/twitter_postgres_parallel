@@ -1,0 +1,18 @@
+sql/complex_01.sql psql: error: connection to server on socket "/var/run/postgresql/.s.PGSQL.5432" failed: FATAL:  role "JDu81" does not exist
+fail
+sql/complex_02.sql psql: error: connection to server on socket "/var/run/postgresql/.s.PGSQL.5432" failed: FATAL:  role "JDu81" does not exist
+fail
+sql/complex_03.sql psql: error: connection to server on socket "/var/run/postgresql/.s.PGSQL.5432" failed: FATAL:  role "JDu81" does not exist
+fail
+sql/complex_04.sql psql: error: connection to server on socket "/var/run/postgresql/.s.PGSQL.5432" failed: FATAL:  role "JDu81" does not exist
+fail
+sql/complex_05.sql psql: error: connection to server on socket "/var/run/postgresql/.s.PGSQL.5432" failed: FATAL:  role "JDu81" does not exist
+fail
+sql/simple_01.sql psql: error: connection to server on socket "/var/run/postgresql/.s.PGSQL.5432" failed: FATAL:  role "JDu81" does not exist
+fail
+sql/simple_02.sql psql: error: connection to server on socket "/var/run/postgresql/.s.PGSQL.5432" failed: FATAL:  role "JDu81" does not exist
+fail
+sql/simple_03.sql psql: error: connection to server on socket "/var/run/postgresql/.s.PGSQL.5432" failed: FATAL:  role "JDu81" does not exist
+fail
+sql/simple_04.sql psql: error: connection to server on socket "/var/run/postgresql/.s.PGSQL.5432" failed: FATAL:  role "JDu81" does not exist
+fail

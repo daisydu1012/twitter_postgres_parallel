@@ -1,0 +1,23 @@
+================================================================================
+load pg_denormalized
+================================================================================
+NOTICE:  identifier "load_tweets.py --inputs data/geoTwitter21-01-01.zip data/geoTwitter21-01-02.zip data/geoTwitter21-01-03.zip data/geoTwitter21-01-04.zip data/geoTwitter21-01-05.zip data/geoTwitter21-01-06.zip data/geoTwitter21-01-07.zip data/geoTwitter21-01-08.zip data/geoTwitter21-01-09.zip data/geoTwitter21-01-10.zip" will be truncated to "load_tweets.py --inputs data/geoTwitter21-01-01.zip data/geoTwi"
+2026-04-14 23:15:49.609153 data/geoTwitter21-01-10.zip
+2026-04-14 23:15:50.332605 insert_tweets i= 0
+Traceback (most recent call last):
+  File "/data/users_bigdata/JDu81/twitter_postgres_parallel/load_tweets_batch.py", line 395, in <module>
+    insert_tweets(connection,tweets,args.batch_size)
+  File "/data/users_bigdata/JDu81/twitter_postgres_parallel/load_tweets_batch.py", line 147, in insert_tweets
+    _insert_tweets(connection, tweet_batch)
+  File "/data/users_bigdata/JDu81/twitter_postgres_parallel/load_tweets_batch.py", line 346, in _insert_tweets
+    with connection.begin() as trans:
+         ^^^^^^^^^^^^^^^^^^
+  File "/home/JDu81/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 859, in begin
+    raise exc.InvalidRequestError(
+sqlalchemy.exc.InvalidRequestError: This connection has already initialized a SQLAlchemy Transaction() object via begin() or autobegin; can't call begin() here unless rollback() or commit() is called first.
+Command exited with non-zero status 1
+1.16user 0.11system 0:01.29elapsed 99%CPU (0avgtext+0avgdata 194560maxresident)k
+0inputs+0outputs (0major+44562minor)pagefaults 0swaps
+================================================================================
+load pg_normalized
+================================================================================
