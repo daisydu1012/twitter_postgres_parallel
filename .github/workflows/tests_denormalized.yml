@@ -4,20 +4,23 @@ on:
     branches: ['*']
   pull_request:
     branches: ['*']
+
 jobs:
   docker:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
-    - name: setup python
-      run: |
-        pip3 install -r requirements.txt
-    - name: docker
-      run: |
-        git submodule init
-        git submodule update
-        docker compose up -d --build
-        docker ps -a
-        sleep 20
-        ./load_tweets_sequential.sh
-        docker compose exec -T pg_denormalized ./run_tests.sh
+      - uses: actions/checkout@v2
+
+      - name: setup python
+        run: |
+          pip3 install -r requirements.txt
+
+      - name: docker
+        run: |
+          git submodule init
+          git submodule update
+          docker compose up -d --build
+          docker ps -a
+          sleep 20
+          time sh load_denormalized.sh data/*
+          docker compose exec -T pg_denormalized ./run_tests.sh
