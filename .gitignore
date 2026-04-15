@@ -2,3 +2,7 @@ results/*
 
 *.swo
 *.swp
+
+__pycache__/
+*.bak
+*_output.txt
