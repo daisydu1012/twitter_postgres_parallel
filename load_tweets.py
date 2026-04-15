@@ -129,8 +129,7 @@ def main():
     args = parser.parse_args()
 
     engine = sqlalchemy.create_engine(args.db)
-    connection = engine.connect()
-
+    connection = engine.connect().execution_options(isolation_level="AUTOCOMMIT")
     for filename in sorted(args.inputs):
         print(datetime.datetime.now(), filename)
         with zipfile.ZipFile(filename, 'r') as archive:
