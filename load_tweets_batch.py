@@ -1,6 +1,5 @@
 #!/usr/bin/python3
 
-import psycopg2
 import sqlalchemy
 import datetime
 import zipfile
@@ -24,22 +23,23 @@ def _bulk_insert_sql(table, rows):
     if not rows:
         raise ValueError('Must be at least one dictionary in the rows variable')
 
-    keys = set(rows[0].keys())
+    keys = sorted(rows[0].keys())
     for row in rows:
-        if set(row.keys()) != keys:
+        if set(row.keys()) != set(keys):
             raise ValueError('All dictionaries must contain the same keys')
 
     sql = (
-        f"INSERT INTO {table} ("
-        + ",".join(keys)
-        + ") VALUES "
-        + ",".join(
+        f"INSERT INTO {table} (" + ",".join(keys) + ") VALUES " +
+        ",".join(
             ["(" + ",".join([f":{key}{i}" for key in keys]) + ")" for i in range(len(rows))]
-        )
-        + " ON CONFLICT DO NOTHING"
+        ) +
+        " ON CONFLICT DO NOTHING"
     )
-
-    binds = {key + str(i): value for i, row in enumerate(rows) for key, value in row.items()}
+    binds = {
+        key + str(i): value
+        for i, row in enumerate(rows)
+        for key, value in row.items()
+    }
     return sql, binds
 
 
@@ -48,6 +48,27 @@ def bulk_insert(connection, table, rows):
         return
     sql, binds = _bulk_insert_sql(table, rows)
     connection.execute(sqlalchemy.sql.text(sql), binds)
+
+
+def insert_users_one_by_one(connection, rows):
+    if len(rows) == 0:
+        return
+
+    keys = sorted(rows[0].keys())
+    for row in rows:
+        if set(row.keys()) != set(keys):
+            raise ValueError('All dictionaries must contain the same keys')
+
+    sql = (
+        f"INSERT INTO users (" + ",".join(keys) + ") VALUES (" +
+        ",".join([f":{key}" for key in keys]) +
+        ") ON CONFLICT DO NOTHING"
+    )
+    stmt = sqlalchemy.sql.text(sql)
+
+    # stable ordering helps reduce lock inversions across parallel workers
+    for row in sorted(rows, key=lambda r: (r.get('id_users') is None, r.get('id_users'))):
+        connection.execute(stmt, row)
 
 
 def insert_tweets(connection, tweets, batch_size=1000):
@@ -212,9 +233,11 @@ def _insert_tweets(connection, input_tweets):
                 'type': remove_nulls(medium['type']),
             })
 
-    bulk_insert(connection, 'users', users)
-    bulk_insert(connection, 'users', users_unhydrated_from_tweets)
-    bulk_insert(connection, 'users', users_unhydrated_from_mentions)
+    # users are the only table inserted row-by-row to avoid deadlocks in parallel runs
+    insert_users_one_by_one(connection, users)
+    insert_users_one_by_one(connection, users_unhydrated_from_tweets)
+    insert_users_one_by_one(connection, users_unhydrated_from_mentions)
+
     bulk_insert(connection, 'tweet_mentions', tweet_mentions)
     bulk_insert(connection, 'tweet_tags', tweet_tags)
     bulk_insert(connection, 'tweet_media', tweet_media)
@@ -222,23 +245,34 @@ def _insert_tweets(connection, input_tweets):
 
     sql = sqlalchemy.sql.text(
         '''
-        INSERT INTO tweets
-            (id_tweets,id_users,created_at,in_reply_to_status_id,in_reply_to_user_id,quoted_status_id,geo,retweet_count,quote_count,favorite_count,withheld_copyright,withheld_in_countries,place_name,country_code,state_code,lang,text,source)
-        VALUES
-        '''
-        +
-        ','.join([
-            f"(:id_tweets{i},:id_users{i},:created_at{i},:in_reply_to_status_id{i},:in_reply_to_user_id{i},:quoted_status_id{i},ST_GeomFromText(:geo_str{i} || '(' || :geo_coords{i} || ')'),:retweet_count{i},:quote_count{i},:favorite_count{i},:withheld_copyright{i},:withheld_in_countries{i},:place_name{i},:country_code{i},:state_code{i},:lang{i},:text{i},:source{i})"
+        INSERT INTO tweets (
+            id_tweets,id_users,created_at,in_reply_to_status_id,in_reply_to_user_id,
+            quoted_status_id,geo,retweet_count,quote_count,favorite_count,
+            withheld_copyright,withheld_in_countries,place_name,country_code,
+            state_code,lang,text,source
+        ) VALUES
+        ''' + ','.join([
+            f"""(
+                :id_tweets{i},:id_users{i},:created_at{i},:in_reply_to_status_id{i},
+                :in_reply_to_user_id{i},:quoted_status_id{i},
+                ST_GeomFromText(:geo_str{i} || '(' || :geo_coords{i} || ')'),
+                :retweet_count{i},:quote_count{i},:favorite_count{i},
+                :withheld_copyright{i},:withheld_in_countries{i},:place_name{i},
+                :country_code{i},:state_code{i},:lang{i},:text{i},:source{i}
+            )"""
             for i in range(len(tweets))
-        ])
-        +
-        '''
+        ]) + '''
         ON CONFLICT DO NOTHING
         '''
     )
+
     connection.execute(
         sql,
-        {key + str(i): value for i, tweet in enumerate(tweets) for key, value in tweet.items()}
+        {
+            key + str(i): value
+            for i, tweet in enumerate(tweets)
+            for key, value in tweet.items()
+        }
     )
 
 
