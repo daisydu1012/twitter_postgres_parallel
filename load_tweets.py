@@ -46,9 +46,7 @@ def get_id_urls(connection, url):
     return res[0]
 
 
-def insert_tweet(connection, tweet):
-    normalized = is_normalized(connection)
-
+def insert_tweet(connection, tweet, normalized):
     # skip if exists
     sql = sqlalchemy.sql.text("""
         SELECT id_tweets
@@ -59,7 +57,6 @@ def insert_tweet(connection, tweet):
         return
 
     with connection.begin():
-
         # ------------------------
         # users (author)
         # ------------------------
@@ -257,9 +254,8 @@ def main():
 
     engine = sqlalchemy.create_engine(args.db)
 
-    connection = engine.connect().execution_options(
-        isolation_level="AUTOCOMMIT"
-    )
+    with engine.connect() as conn:
+        normalized = is_normalized(conn)
 
     i = 0
 
@@ -271,7 +267,9 @@ def main():
                 with z.open(name) as f:
                     for line in f:
                         tweet = json.loads(line)
-                        insert_tweet(connection, tweet)
+
+                        with engine.connect() as connection:
+                            insert_tweet(connection, tweet, normalized)
 
                         if i % args.print_every == 0:
                             print(f"{filename} - i= {i} id= {tweet['id']}")
