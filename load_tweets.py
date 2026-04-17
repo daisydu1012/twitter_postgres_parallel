@@ -11,6 +11,31 @@ def remove_nulls(s):
     return s.replace('\x00', '')
 
 
+def get_id_urls(connection, url):
+    if url is None:
+        return None
+
+    url = remove_nulls(url)
+
+    sql = sqlalchemy.sql.text("""
+        INSERT INTO urls (url)
+        VALUES (:url)
+        ON CONFLICT DO NOTHING
+        RETURNING id_urls
+    """)
+    res = connection.execute(sql, {'url': url}).first()
+
+    if res is None:
+        sql = sqlalchemy.sql.text("""
+            SELECT id_urls
+            FROM urls
+            WHERE url = :url
+        """)
+        res = connection.execute(sql, {'url': url}).first()
+
+    return res[0]
+
+
 def insert_tweet(connection, tweet):
 
     # skip if exists
@@ -79,7 +104,7 @@ def insert_tweet(connection, tweet):
             'retweet': tweet.get('retweet_count', 0),
             'favorite': tweet.get('favorite_count', 0),
             'quote_count': tweet.get('quote_count', 0),
-            'source': tweet.get('source'),
+            'source': remove_nulls(tweet.get('source')),
             'text': text
         })
 
@@ -98,11 +123,11 @@ def insert_tweet(connection, tweet):
                 ON CONFLICT DO NOTHING
             """), {
                 'id': tweet['id'],
-                'tag': tag['text'].lower()
+                'tag': remove_nulls(tag['text'].lower())
             })
 
         # ------------------------
-        # mentions (FIXED FK ISSUE)
+        # mentions
         # ------------------------
         try:
             mentions = tweet['extended_tweet']['entities']['user_mentions']
@@ -139,29 +164,37 @@ def insert_tweet(connection, tweet):
             urls = tweet.get('entities', {}).get('urls', [])
 
         for u in urls:
-            connection.execute(sqlalchemy.sql.text("""
-                INSERT INTO tweet_urls (id_tweets, url)
-                VALUES (:id, :url)
-                ON CONFLICT DO NOTHING
-            """), {
-                'id': tweet['id'],
-                'url': u.get('expanded_url')
-            })
+            expanded_url = u.get('expanded_url')
+            id_url = get_id_urls(connection, expanded_url)
+
+            if id_url is not None:
+                connection.execute(sqlalchemy.sql.text("""
+                    INSERT INTO tweet_urls (id_tweets, id_urls)
+                    VALUES (:id, :id_url)
+                    ON CONFLICT DO NOTHING
+                """), {
+                    'id': tweet['id'],
+                    'id_url': id_url
+                })
 
         # ------------------------
         # media
         # ------------------------
         media = tweet.get('extended_entities', {}).get('media', [])
         for m in media:
-            connection.execute(sqlalchemy.sql.text("""
-                INSERT INTO tweet_media (id_tweets, url, type)
-                VALUES (:id, :url, :type)
-                ON CONFLICT DO NOTHING
-            """), {
-                'id': tweet['id'],
-                'url': m.get('media_url'),
-                'type': m.get('type')
-            })
+            media_url = m.get('media_url')
+            id_url = get_id_urls(connection, media_url)
+
+            if id_url is not None:
+                connection.execute(sqlalchemy.sql.text("""
+                    INSERT INTO tweet_media (id_tweets, id_urls, type)
+                    VALUES (:id, :id_url, :type)
+                    ON CONFLICT DO NOTHING
+                """), {
+                    'id': tweet['id'],
+                    'id_url': id_url,
+                    'type': remove_nulls(m.get('type'))
+                })
 
 
 def main():
