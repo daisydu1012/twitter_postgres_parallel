@@ -37,6 +37,10 @@ def insert_users_one_by_one(connection, rows):
     if len(rows) == 0:
         return
 
+    import time
+    import random
+    import psycopg2
+
     keys = sorted(rows[0].keys())
     sql = (
         "INSERT INTO users (" + ",".join(keys) + ") VALUES (" +
@@ -46,8 +50,15 @@ def insert_users_one_by_one(connection, rows):
     stmt = sqlalchemy.sql.text(sql)
 
     for row in sorted(rows, key=lambda r: (r.get('id_users') is None, r.get('id_users'))):
-        connection.execute(stmt, row)
-
+        while True:
+            try:
+                connection.execute(stmt, row)
+                break
+            except sqlalchemy.exc.OperationalError as e:
+                if isinstance(e.orig, psycopg2.errors.DeadlockDetected):
+                    time.sleep(random.uniform(0.01, 0.1))
+                    continue
+                raise
 
 def insert_rows_one_by_one(connection, table, rows):
     if len(rows) == 0:
