@@ -74,9 +74,7 @@ def insert_users_one_by_one(connection, rows):
 def insert_tweets(connection, tweets, batch_size=1000):
     for i, tweet_batch in enumerate(batch(tweets, batch_size)):
         print(datetime.datetime.now(), 'insert_tweets i=', i)
-        with connection.begin():
-            _insert_tweets(connection, tweet_batch)
-
+        _insert_tweets(connection, tweet_batch)
 
 def _insert_tweets(connection, input_tweets):
     users = []
